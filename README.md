@@ -30,7 +30,13 @@ This rewrites all English and Arabic pages. Requires Python 3 only.
 ## Preview locally
 
 ```bash
-cd public_html && python3 -m http.server 8000
+python3 tools/serve.py 8000
 ```
 
 Then open http://localhost:8000 (English) or http://localhost:8000/ar/ (Arabic).
+
+## Clean URLs
+
+Pages are linked without `.html` (`/about`, `/ar/service`). On the hosting server,
+`public_html/.htaccess` maps these to the `.html` files and redirects old `.html`
+links to the clean address. GitHub Pages handles clean URLs automatically.

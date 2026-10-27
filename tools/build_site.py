@@ -223,11 +223,20 @@ def page_hero(title, sub, crumbs, img):
 </section>
 '''
 
+PAGE_LINK = re.compile(r'href="((?:\.\./|ar/)?)([a-z-]+)\.html(#[^"]*)?"')
+
+def clean_links(html):
+    """Drop ".html" from links between pages: about.html -> about, index.html -> ./"""
+    def repl(m):
+        prefix, page, frag = m.group(1), m.group(2), m.group(3) or ""
+        return f'href="{(prefix or "./") if page == "index" else prefix + page}{frag}"'
+    return PAGE_LINK.sub(repl, html)
+
 def write(name, title, desc, body):
     out_dir = os.path.join(ROOT, "ar") if LANG == "ar" else ROOT
     os.makedirs(out_dir, exist_ok=True)
     with open(os.path.join(out_dir, name), "w", encoding="utf-8") as f:
-        f.write(head(title, desc, name) + header(name) + body + footer())
+        f.write(clean_links(head(title, desc, name) + header(name) + body + footer()))
     print("wrote", ("ar/" if LANG == "ar" else "") + name)
 
 def site_title(page):

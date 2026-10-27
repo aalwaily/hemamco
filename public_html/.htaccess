@@ -1,1 +1,17 @@
-Redirect 301 /certificate.html /about.html
+# Clean URLs: /about serves about.html, /ar/service serves ar/service.html
+Options -MultiViews
+RewriteEngine On
+
+# Old Certificates page was removed
+RewriteRule ^certificate(\.html)?$ /about [R=301,L]
+
+# Old .html addresses redirect to the clean version (only real browser requests)
+RewriteCond %{THE_REQUEST} \s/+((?:[^?\s]*/)?)index\.html[\s?] [NC]
+RewriteRule ^ /%1 [R=301,L,NE]
+RewriteCond %{THE_REQUEST} \s/+([^?\s]+)\.html[\s?] [NC]
+RewriteRule ^ /%1 [R=301,L,NE]
+
+# Serve page.html for /page when that file exists
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME}.html -f
+RewriteRule ^(.+?)/?$ $1.html [L]
