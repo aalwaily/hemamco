@@ -19,6 +19,8 @@
   var toggle = document.querySelector(".menu-toggle");
   if (toggle) {
     toggle.addEventListener("click", function () {
+      // open the menu directly under the header, wherever the page is scrolled
+      if (header) document.documentElement.style.setProperty("--nav-top", header.getBoundingClientRect().bottom + "px");
       var open = body.classList.toggle("nav-open");
       toggle.setAttribute("aria-expanded", open ? "true" : "false");
     });
