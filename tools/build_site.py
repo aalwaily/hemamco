@@ -3,7 +3,7 @@
 
 Usage (from the repository root):  python3 tools/build_site.py public_html
 """
-import os, re, sys
+import html, os, re, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 exec(open(os.path.join(HERE, "icons.py")).read())
 exec(open(os.path.join(HERE, "data_bi.py")).read())
@@ -23,6 +23,19 @@ def date(s):
     if LANG != "ar":
         return s
     return re.sub(r"[A-Z][a-z]+", lambda m: MONTHS_AR.get(m.group(0), m.group(0)), s)
+
+def E(text):
+    return html.escape(text, quote=True)
+
+def lines(pair):
+    return "<br>".join(E(part) for part in L(pair).split("\n"))
+
+def pct_text(p):
+    if p is None:
+        return T("Not stated", "غير مذكورة")
+    if float(p) == int(p):
+        return f"{int(p)}%"
+    return f"{p:.1f}".rstrip("0").rstrip(".") + "%"
 
 def arrow():
     return ic("arrow").replace("<svg", '<svg class="arr"', 1)
@@ -266,10 +279,16 @@ def clients_block():
     return f'<div class="clients reveal">{c}</div>'
 
 def proj_cards(items):
-    return "\n".join(f'''<a class="proj-card reveal" href="ongoing.html">
-  <img src="{PIMG(img)}" alt="{L(title)}" loading="lazy">
-  <div class="info"><span class="tag">{L(cat)}</span><h3>{L(title)}</h3><div class="meta">{L(client)} · {date(dt)}</div></div>
-</a>''' for img, title, client, dt, cat in items)
+    cards = []
+    for img, title, client, value, service, dt, pct in items:
+        meta = f"{E(L(client))} · {E(date(dt))}"
+        if pct is not None:
+            meta += f" · {pct_text(pct)}"
+        cards.append(f'''<a class="proj-card reveal" href="ongoing.html">
+  <img src="{PIMG(img)}" alt="{E(L(title))}" loading="lazy">
+  <div class="info"><span class="tag">{E(L(service))}</span><h3>{E(L(title))}</h3><div class="meta">{meta}</div></div>
+</a>''')
+    return "\n".join(cards)
 
 def side(current):
     links = [(T("Company Overview", "نبذة عن الشركة"), "about.html"), (T("Safety Policy", "سياسة السلامة"), "safety.html"),
@@ -277,15 +296,26 @@ def side(current):
     li = "".join(f'<li><a href="{h}"{" class=active" if h == current else ""}>{l} {arrow()}</a></li>' for l, h in links)
     return f'<aside class="sticky-side"><ul class="side-nav">{li}</ul></aside>'
 
+def completion_block(pct):
+    label = T("Completion", "نسبة الإنجاز")
+    if pct is None:
+        return f'<div class="completion"><div class="top"><span>{label}</span><strong>{pct_text(None)}</strong></div></div>'
+    width = f"{pct:.2f}".rstrip("0").rstrip(".")
+    return f'''<div class="completion">
+  <div class="top"><span>{label}</span><strong>{pct_text(pct)}</strong></div>
+  <div class="track" role="progressbar" aria-valuenow="{width}" aria-valuemin="0" aria-valuemax="100" aria-label="{label}"><span class="bar" style="width:{width}%"></span></div>
+</div>'''
+
 def project_rows():
     out = ""
-    for img, title, client, dt, cat in ONGOING:
+    for img, title, client, value, service, dt, pct in ONGOING:
         out += f'''<article class="project-row reveal">
-  <div class="img"><img src="{PIMG(img)}" alt="{L(title)}" loading="lazy"></div>
+  <div class="img"><img src="{PIMG(img)}" alt="{E(L(title))}" loading="lazy"></div>
   <div class="body">
     <span class="status-pill ongoing">{T("Ongoing", "جارٍ")}</span>
-    <h3>{L(title)}</h3>
-    <dl class="dl"><dt>{T("Client", "العميل")}</dt><dd>{L(client)}</dd><dt>{T("Start date", "تاريخ البدء")}</dt><dd>{date(dt)}</dd><dt>{T("Category", "الفئة")}</dt><dd>{L(cat)}</dd></dl>
+    <h3>{E(L(title))}</h3>
+    <dl class="dl"><dt>{T("Client", "العميل")}</dt><dd>{E(L(client))}</dd><dt>{T("Contract value", "قيمة العقد")}</dt><dd>{E(L(value))}</dd><dt>{T("Type of service", "نوع الخدمة")}</dt><dd>{E(L(service))}</dd><dt>{T("Start date", "تاريخ البدء")}</dt><dd>{E(date(dt))}</dd></dl>
+    {completion_block(pct)}
   </div>
 </article>'''
     return out
@@ -398,7 +428,7 @@ def page_home():
 <section class="section">
   <div class="container">
     <div class="section-head reveal" style="display:flex;justify-content:space-between;align-items:flex-end;max-width:none;gap:30px;flex-wrap:wrap">
-      <div style="max-width:640px"><span class="eyebrow">{T("Our projects", "مشاريعنا")}</span><h2 style="margin:0">{T("Current work across the Eastern Province", "أعمالنا الحالية في المنطقة الشرقية")}</h2></div>
+      <div style="max-width:640px"><span class="eyebrow">{T("Our projects", "مشاريعنا")}</span><h2 style="margin:0">{T("Current work across the Kingdom", "أعمالنا الحالية في أنحاء المملكة")}</h2></div>
       <a href="ongoing.html" class="btn btn-outline">{T("All projects", "جميع المشاريع")} {arrow()}</a>
     </div>
     <div class="grid grid-3">
@@ -643,24 +673,27 @@ def page_services():
             "الأعمال المدنية والترابية والميكانيكية والأنابيب والتصنيع والأعمال الكهربائية وتركيب الهياكل الفولاذية والدهانات والحماية من الحريق والرفع في المملكة."), body)
 
 def page_ongoing():
-    body = page_hero(T("Ongoing Projects", "المشاريع الجارية"), T("Active works for Saudi Aramco across the Eastern Province.", "أعمال جارية لصالح أرامكو السعودية في المنطقة الشرقية."),
+    n = len(ONGOING)
+    body = page_hero(T("Ongoing Projects", "المشاريع الجارية"),
+                     T(f"{n} active contracts across oil, gas and pipeline works.", f"{n} عقود جارية في أعمال النفط والغاز وخطوط الأنابيب."),
                      [(T("Projects", "المشاريع"), "project.html"), (T("Ongoing", "الجارية"), None)], "hero-refinery.jpg") + f'''
 <section class="section bg-soft"><div class="container">{project_rows()}</div></section>
 {cta()}'''
     write("ongoing.html", site_title(T("Ongoing Projects", "المشاريع الجارية")),
-          T("Hemamco's ongoing Saudi Aramco projects — excavation, pipeline ROW, steel erection and fencing.", "مشاريع هممكو الجارية لأرامكو السعودية — الحفر وحرم خطوط الأنابيب وتركيب الهياكل الفولاذية والأسوار."), body)
+          T("Hemamco's ongoing projects, with client, contract value, service and completion for each.",
+            "مشاريع هممكو الجارية، مع العميل وقيمة العقد ونوع الخدمة ونسبة الإنجاز لكل مشروع."), body)
 
 def page_projects():
     card = lambda href, img, icn, h, p, link, d="": f'<a href="{href}" class="svc-card reveal {d}" style="color:inherit"><div class="img"><img src="{PIMG(img)}" alt="" loading="lazy"><span class="icon">{ic(icn)}</span></div><div class="body"><h3>{h}</h3><p>{p}</p><span class="link-arrow">{link} {arrow()}</span></div></a>'
-    millions = f"{TOTAL_VALUE / 1e6:.0f}"
+    n_done, n_live = len(COMPLETED), len(ONGOING)
     body = page_hero(T("Our Projects", "مشاريعنا"), T("Two decades of delivery for the Kingdom’s leading organisations.", "عقدان من الإنجاز لكبرى الجهات في المملكة."),
                      [(T("Projects", "المشاريع"), None)], "hero-desert-site.jpg") + f'''
 {stats_block("section-sm bg-soft")}
 <section class="section">
   <div class="container">
     <div class="grid grid-3">
-      {card("ongoing.html", "project-big-img2.jpg", "clock", T("Ongoing Projects", "المشاريع الجارية"), T("Current Saudi Aramco works including pipeline ROW, excavation and steel erection.", "أعمال حالية لأرامكو السعودية تشمل حرم خطوط الأنابيب والحفر وتركيب الهياكل الفولاذية."), T("View ongoing", "عرض المشاريع الجارية"))}
-      {card("completed.html", "project-big-img6.jpg", "check", T("Completed Projects", "المشاريع المنجزة"), T(f"{len(COMPLETED)} completed contracts worth over SAR {millions} million since 2006.", f"{len(COMPLETED)} عقدًا منجزًا بقيمة تتجاوز {millions} مليون ريال منذ 2006."), T("View record", "عرض السجل"), "d1")}
+      {card("ongoing.html", "project-big-img2.jpg", "clock", T("Ongoing Projects", "المشاريع الجارية"), T(f"{n_live} active contracts, with completion shown for each.", f"{n_live} عقود جارية، مع نسبة الإنجاز لكل منها."), T("View ongoing", "عرض المشاريع الجارية"))}
+      {card("completed.html", "project-big-img6.jpg", "check", T("Completed Projects", "المشاريع المنجزة"), T(f"{n_done} completed contracts since 2006. Stated values total {STATED_MILLION_TEXT} million, excluding open purchase orders.", f"{n_done} عقدًا منجزًا منذ 2006. مجموع القيم المذكورة {STATED_MILLION_TEXT} مليون، دون أوامر الشراء المفتوحة."), T("View record", "عرض السجل"), "d1")}
       {card("gallery.html", "project-big-img12.jpg", "layers", T("Project Gallery", "معرض المشاريع"), T("Photographs from our sites in Ras Tanura, Ras Al-Khair, Al-Khobar and beyond.", "صور من مواقعنا في رأس تنورة ورأس الخير والخبر وغيرها."), T("Open gallery", "فتح المعرض"), "d2")}
     </div>
   </div>
@@ -671,31 +704,40 @@ def page_projects():
           T("Hemamco projects overview — ongoing, completed and gallery.", "نظرة عامة على مشاريع هممكو — الجارية والمنجزة ومعرض الصور."), body)
 
 def page_completed():
-    rows = "".join(f'<tr><td><strong>{L(c)}</strong></td><td>{L(d)}</td><td class="muted">{L(e)}</td><td class="num">{v:,.2f}</td><td style="white-space:nowrap">{date(dt)}</td><td><span class="badge-done">{T("Completed", "منجز")}</span></td></tr>'
-                   for c, d, e, v, dt in COMPLETED)
+    rows = "".join(
+        "<tr>"
+        f'<td class="sl">{i}</td>'
+        f"<td><strong>{lines(project)}</strong></td>"
+        f"<td>{lines(client)}</td>"
+        f"<td>{lines(value)}</td>"
+        f"<td>{lines(service)}</td>"
+        f'<td style="white-space:nowrap">{E(date(dt))}</td>'
+        f'<td><span class="badge-done">{T("Completed", "منجز")}</span></td>'
+        "</tr>"
+        for i, (project, client, value, service, dt) in enumerate(COMPLETED, 1))
     n = len(COMPLETED)
-    body = page_hero(T("Completed Projects", "المشاريع المنجزة"), T("A proven track record of delivery across the Eastern Province and beyond.", "سجل حافل بالإنجازات في المنطقة الشرقية وخارجها."),
+    body = page_hero(T("Completed Projects", "المشاريع المنجزة"), T("A proven track record of delivery across the Kingdom.", "سجل حافل بالإنجازات في أنحاء المملكة."),
                      [(T("Projects", "المشاريع"), "project.html"), (T("Completed", "المنجزة"), None)], "header-canopy.jpg") + f'''
 <section class="section bg-soft">
   <div class="container">
     <div class="table-wrap reveal">
       <div class="table-tools">
         <div class="count">{T(f'Showing <span data-count-for="t-completed">{n}</span> of {n} projects', f'عرض <span data-count-for="t-completed">{n}</span> من {n} مشروعًا')}</div>
-        <label class="search-input">{ic("search")}<span class="sr-only">{T("Search projects", "ابحث في المشاريع")}</span><input type="search" placeholder="{T("Search client, scope or end user…", "ابحث بالعميل أو نطاق العمل أو المستخدم النهائي…")}" data-table-search="t-completed"></label>
+        <label class="search-input">{ic("search")}<span class="sr-only">{T("Search projects", "ابحث في المشاريع")}</span><input type="search" placeholder="{T("Search project, client or service…", "ابحث بالمشروع أو العميل أو نوع الخدمة…")}" data-table-search="t-completed"></label>
       </div>
       <div class="table-scroll">
         <table class="data" id="t-completed">
-          <thead><tr><th>{T("Client / Customer", "العميل")}</th><th>{T("Description", "نطاق العمل")}</th><th>{T("End User", "المستخدم النهائي")}</th><th class="num">{T("Contract Value (SAR)", "قيمة العقد (ريال)")}</th><th>{T("Date", "التاريخ")}</th><th>{T("Status", "الحالة")}</th></tr></thead>
+          <thead><tr><th class="sl">{T("No.", "م")}</th><th>{T("Project", "المشروع")}</th><th>{T("Client", "العميل")}</th><th>{T("Contract value", "قيمة العقد")}</th><th>{T("Type of service", "نوع الخدمة")}</th><th>{T("Start date", "تاريخ البدء")}</th><th>{T("Status", "الحالة")}</th></tr></thead>
           <tbody>{rows}</tbody>
         </table>
       </div>
-      <div class="table-foot"><span>{T("Total contract value", "إجمالي قيمة العقود")}</span><span>{T("SAR", "ريال")} {TOTAL_VALUE:,.2f}</span></div>
+      <div class="table-foot"><span>{T("Stated value, excluding open purchase orders", "القيمة المذكورة، دون أوامر الشراء المفتوحة")}</span><span>{T(f"{STATED_MILLION_TEXT} million", f"{STATED_MILLION_TEXT} مليون")}</span></div>
     </div>
   </div>
 </section>
 {cta()}'''
     write("completed.html", site_title(T("Completed Projects", "المشاريع المنجزة")),
-          T("Full list of Hemamco completed projects, clients, end users and contract values.", "القائمة الكاملة لمشاريع هممكو المنجزة وعملائها والمستخدمين النهائيين وقيم العقود."), body)
+          T("Full list of Hemamco completed projects, clients, services and contract values.", "القائمة الكاملة لمشاريع هممكو المنجزة وعملائها وخدماتها وقيم العقود."), body)
 
 def page_gallery():
     items = "".join(f'''<a class="proj-card reveal" href="{PIMG(f"project-big-img{n}.jpg")}" data-lightbox data-caption="{L(title)} — {L(loc)}" data-cat="{cat}">
@@ -819,4 +861,4 @@ PAGES = [page_home, page_about, page_safety, page_quality, page_org, page_servic
 for LANG, P in (("en", ""), ("ar", "../")):
     for fn in PAGES:
         fn()
-print("staff", TOTAL_STAFF, "equip", TOTAL_EQUIP, "value", TOTAL_VALUE)
+print("staff", TOTAL_STAFF, "equip", TOTAL_EQUIP, "completed", len(COMPLETED), "ongoing", len(ONGOING), "stated_million", STATED_MILLION_TEXT)
